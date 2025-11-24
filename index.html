@@ -64,12 +64,18 @@ setInterval(() => {
     const p = gameState.player;
     
     // Check if there are ANY fully grown plants (blooms)
-    const hasActiveCrops = gameState.world.plants.length > 0	    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
+    const hasActiveCrops = gameState.world.plants.length > 0;
+    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
 
     // If blooms exist, regen takes 60 seconds. Otherwise (empty or just seeds), 5 seconds.
     const regenTime = hasBlooms ? 60 : 5;
 
-    waterTimer++;
+    if (p.water < 20) {
+        waterTimer++;
+    } else {
+        waterTimer = 0;
+    }
+
     const percent = Math.min(100, Math.floor((waterTimer / regenTime) * 100));
     document.getElementById('regen-timer').innerText = `(Regen: ${percent}%)`;
     document.getElementById('regen-timer').style.color = "#aaa";
@@ -280,5 +286,4 @@ init();
 
 </script>
 </body>
-</html>
 </html>
