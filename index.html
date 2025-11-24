@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Starlight Garden</title>
+    <title>Starlight Garden v1.1</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,8 +19,12 @@
         <canvas id="gameCanvas" width="640" height="480"></canvas>
         
         <div class="hud">
-            <p>Instructions: <strong>Arrow Keys</strong> to Move | <strong>Space</strong> to Plant/Water</p>
-            <p id="status">Seeds: 5 | Water: 10</p>
+            <p><strong>Arrow Keys</strong> to Move | <strong>Space</strong> to Plant/Water/Harvest</p>
+            <div class="stats-bar">
+                <span id="status">Seeds: 5 | Water: 10</span>
+                <span id="score-display">Harvested: 0</span>
+                <span id="regen-timer" style="color: #666; font-size: 0.8em;">(Water in: --)</span>
+            </div>
         </div>
         <div id="message-area"></div>
     </div>
@@ -33,27 +37,52 @@ const TILE_SIZE = 32;
 const COLS = 20;
 const ROWS = 15;
 
-// 0: Grass, 1: Rock, 2: Water
 const COLORS = {
     0: '#2d4a3e', // Grass
     1: '#595652', // Rock
     2: '#4da6ff', // Water
-    player: '#ffcc00', // Player (Star)
+    player: '#ffcc00', // Player
     plant_seed: '#8fbc8f',
     plant_bloom: '#ff99cc'
 };
 
 // Default State
 let gameState = {
-    meta: { version: "1.0", timestamp: Date.now() },
-    player: { x: 1, y: 1, seeds: 5, water: 10 },
+    meta: { version: "1.1", timestamp: Date.now() },
+    player: { x: 1, y: 1, seeds: 5, water: 10, score: 0 },
     world: {
         width: COLS,
         height: ROWS,
-        map: Array(ROWS).fill().map(() => Array(COLS).fill(0)), // All grass default
-        plants: [] // Format: {x, y, stage}
+        map: Array(ROWS).fill().map(() => Array(COLS).fill(0)), 
+        plants: [] 
     }
 };
+
+// Water Regeneration Logic
+let waterTimer = 0;
+setInterval(() => {
+    const p = gameState.player;
+    
+    // Determine required time based on rules
+    // Rule 1: Have seeds? 15 seconds.
+    // Rule 2: No seeds? 60 seconds.
+    const threshold = (p.seeds > 0) ? 15 : 60;
+    
+    waterTimer++;
+    
+    // Visual countdown for the user
+    const countdown = threshold - waterTimer;
+    document.getElementById('regen-timer').innerText = `(Water in: ${countdown}s)`;
+
+    if (waterTimer >= threshold) {
+        p.water++;
+        waterTimer = 0;
+        updateHUD();
+        // Optional: subtle message if you want it
+        // showMessage("Water recovered."); 
+    }
+}, 1000);
+
 
 // Setup Canvas
 const canvas = document.getElementById('gameCanvas');
@@ -74,13 +103,11 @@ document.addEventListener('keydown', (e) => {
  * CORE LOGIC
  */
 function tryMove(newX, newY) {
-    // Bounds check
     if (newX < 0 || newX >= gameState.world.width || newY < 0 || newY >= gameState.world.height) return;
     
-    // Collision check (1 is Rock, 2 is Water)
     const tile = gameState.world.map[newY][newX];
     if (tile === 1 || tile === 2) {
-        showMessage("Can't walk there!");
+        showMessage("Blocked path.");
         return;
     }
 
@@ -90,23 +117,34 @@ function tryMove(newX, newY) {
 
 function interact() {
     const p = gameState.player;
-    // Check if plant exists at current location
-    const plantIndex = gameState.world.plants.findIndex(pl => pl.x === p.x && pl.y === p.y);
+    const plants = gameState.world.plants;
+    const plantIndex = plants.findIndex(pl => pl.x === p.x && pl.y === p.y);
 
     if (plantIndex !== -1) {
-        // Water existing plant
-        if (gameState.player.water > 0) {
-            gameState.world.plants[plantIndex].stage = 'bloomed';
-            gameState.player.water--;
-            showMessage("You watered the plant. It bloomed!");
-        } else {
-            showMessage("Not enough water!");
+        // Plant exists here
+        const plant = plants[plantIndex];
+        
+        if (plant.stage === 'seed') {
+            // ACTION: Water the seed
+            if (p.water > 0) {
+                plant.stage = 'bloomed';
+                p.water--;
+                showMessage("You watered the seed. It bloomed!");
+            } else {
+                showMessage("Not enough water!");
+            }
+        } else if (plant.stage === 'bloomed') {
+            // ACTION: Harvest the flower
+            plants.splice(plantIndex, 1); // Remove plant
+            p.seeds += 2; // Get 2 seeds
+            p.score = (p.score || 0) + 1; // Increase score
+            showMessage("Harvested! Got 2 Seeds.");
         }
     } else {
-        // Plant new seed
-        if (gameState.player.seeds > 0) {
+        // ACTION: Plant new seed
+        if (p.seeds > 0) {
             gameState.world.plants.push({ x: p.x, y: p.y, stage: 'seed' });
-            gameState.player.seeds--;
+            p.seeds--;
             showMessage("Planted a seed.");
         } else {
             showMessage("No seeds left!");
@@ -116,14 +154,21 @@ function interact() {
 }
 
 function updateHUD() {
-    document.getElementById('status').innerText = 
-        `Seeds: ${gameState.player.seeds} | Water: ${gameState.player.water}`;
+    const p = gameState.player;
+    // Ensure score exists if loading old save
+    if (typeof p.score === 'undefined') p.score = 0; 
+    
+    document.getElementById('status').innerText = `Seeds: ${p.seeds} | Water: ${p.water}`;
+    document.getElementById('score-display').innerText = `Harvested: ${p.score}`;
 }
 
 function showMessage(msg) {
     const el = document.getElementById('message-area');
     el.innerText = msg;
-    setTimeout(() => el.innerText = "", 2000);
+    // Clear message after 2 seconds
+    setTimeout(() => {
+        if(el.innerText === msg) el.innerText = "";
+    }, 2000);
 }
 
 /**
@@ -137,7 +182,6 @@ function draw() {
         for (let x = 0; x < gameState.world.width; x++) {
             ctx.fillStyle = COLORS[gameState.world.map[y][x]];
             ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            // Grid lines for pixel art feel
             ctx.strokeStyle = '#1a2e26';
             ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
@@ -146,8 +190,9 @@ function draw() {
     // Draw Plants
     gameState.world.plants.forEach(plant => {
         ctx.fillStyle = plant.stage === 'seed' ? COLORS.plant_seed : COLORS.plant_bloom;
-        const offset = plant.stage === 'seed' ? 10 : 6;
-        const size = plant.stage === 'seed' ? 12 : 20;
+        // Make bloomed plants look bigger
+        const offset = plant.stage === 'seed' ? 10 : 4;
+        const size = plant.stage === 'seed' ? 12 : 24;
         ctx.fillRect(plant.x * TILE_SIZE + offset, plant.y * TILE_SIZE + offset, size, size);
     });
 
@@ -160,48 +205,35 @@ function draw() {
  * SAVE / LOAD SYSTEM
  */
 function saveGame() {
-    // 1. Serialize State
-    const jsonString = JSON.stringify(gameState, null, 4); // Pretty print for human readability
-    
-    // 2. Create Blob
+    const jsonString = JSON.stringify(gameState, null, 4);
     const blob = new Blob([jsonString], { type: "text/plain" });
-    
-    // 3. Trigger Download
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `starlight_save_${Date.now()}.txt`;
     link.click();
-    
-    showMessage("Game Saved to Downloads!");
+    showMessage("Game Saved!");
 }
 
 function loadGame(input) {
     const file = input.files[0];
     if (!file) return;
-
     const reader = new FileReader();
-    
     reader.onload = function(e) {
         try {
-            // 1. Parse JSON
             const loadedState = JSON.parse(e.target.result);
+            if (!loadedState.player || !loadedState.world) throw new Error("Invalid Save");
             
-            // 2. Basic Validation
-            if (!loadedState.player || !loadedState.world) {
-                throw new Error("Missing core game data.");
-            }
-
-            // 3. Update State
             gameState = loadedState;
+            // Reset score if missing in old save
+            if (typeof gameState.player.score === 'undefined') gameState.player.score = 0;
+            
             draw();
             updateHUD();
-            showMessage("Game Loaded Successfully!");
+            showMessage("Game Loaded!");
         } catch (err) {
-            console.error(err);
-            alert("Error loading save file: Invalid format.");
+            alert("Error loading save file.");
         }
     };
-
     reader.readAsText(file);
 }
 
