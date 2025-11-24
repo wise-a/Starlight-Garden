@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starlight Garden</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1>Starlight Garden</h1>
+        <div class="controls">
+            <button onclick="saveGame()">💾 Save Game (.txt)</button>
+            <label for="loadInput" class="btn">📂 Load Game (.txt)</label>
+            <input type="file" id="loadInput" accept=".txt" onchange="loadGame(this)">
+        </div>
+        
+        <canvas id="gameCanvas" width="640" height="480"></canvas>
+        
+        <div class="hud">
+            <p>Instructions: <strong>Arrow Keys</strong> to Move | <strong>Space</strong> to Plant/Water</p>
+            <p id="status">Seeds: 5 | Water: 10</p>
+        </div>
+        <div id="message-area"></div>
+    </div>
+
+<script>
+/**
+ * GAME CONSTANTS & STATE
+ */
+const TILE_SIZE = 32;
+const COLS = 20;
+const ROWS = 15;
+
+// 0: Grass, 1: Rock, 2: Water
+const COLORS = {
+    0: '#2d4a3e', // Grass
+    1: '#595652', // Rock
+    2: '#4da6ff', // Water
+    player: '#ffcc00', // Player (Star)
+    plant_seed: '#8fbc8f',
+    plant_bloom: '#ff99cc'
+};
+
+// Default State
+let gameState = {
+    meta: { version: "1.0", timestamp: Date.now() },
+    player: { x: 1, y: 1, seeds: 5, water: 10 },
+    world: {
+        width: COLS,
+        height: ROWS,
+        map: Array(ROWS).fill().map(() => Array(COLS).fill(0)), // All grass default
+        plants: [] // Format: {x, y, stage}
+    }
+};
+
+// Setup Canvas
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Input Handling
+document.addEventListener('keydown', (e) => {
+    const p = gameState.player;
+    if (e.key === 'ArrowUp') tryMove(p.x, p.y - 1);
+    if (e.key === 'ArrowDown') tryMove(p.x, p.y + 1);
+    if (e.key === 'ArrowLeft') tryMove(p.x - 1, p.y);
+    if (e.key === 'ArrowRight') tryMove(p.x + 1, p.y);
+    if (e.key === ' ') interact();
+    draw();
+});
+
+/**
+ * CORE LOGIC
+ */
+function tryMove(newX, newY) {
+    // Bounds check
+    if (newX < 0 || newX >= gameState.world.width || newY < 0 || newY >= gameState.world.height) return;
+    
+    // Collision check (1 is Rock, 2 is Water)
+    const tile = gameState.world.map[newY][newX];
+    if (tile === 1 || tile === 2) {
+        showMessage("Can't walk there!");
+        return;
+    }
+
+    gameState.player.x = newX;
+    gameState.player.y = newY;
+}
+
+function interact() {
+    const p = gameState.player;
+    // Check if plant exists at current location
+    const plantIndex = gameState.world.plants.findIndex(pl => pl.x === p.x && pl.y === p.y);
+
+    if (plantIndex !== -1) {
+        // Water existing plant
+        if (gameState.player.water > 0) {
+            gameState.world.plants[plantIndex].stage = 'bloomed';
+            gameState.player.water--;
+            showMessage("You watered the plant. It bloomed!");
+        } else {
+            showMessage("Not enough water!");
+        }
+    } else {
+        // Plant new seed
+        if (gameState.player.seeds > 0) {
+            gameState.world.plants.push({ x: p.x, y: p.y, stage: 'seed' });
+            gameState.player.seeds--;
+            showMessage("Planted a seed.");
+        } else {
+            showMessage("No seeds left!");
+        }
+    }
+    updateHUD();
+}
+
+function updateHUD() {
+    document.getElementById('status').innerText = 
+        `Seeds: ${gameState.player.seeds} | Water: ${gameState.player.water}`;
+}
+
+function showMessage(msg) {
+    const el = document.getElementById('message-area');
+    el.innerText = msg;
+    setTimeout(() => el.innerText = "", 2000);
+}
+
+/**
+ * RENDERING
+ */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Map
+    for (let y = 0; y < gameState.world.height; y++) {
+        for (let x = 0; x < gameState.world.width; x++) {
+            ctx.fillStyle = COLORS[gameState.world.map[y][x]];
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            // Grid lines for pixel art feel
+            ctx.strokeStyle = '#1a2e26';
+            ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+    }
+
+    // Draw Plants
+    gameState.world.plants.forEach(plant => {
+        ctx.fillStyle = plant.stage === 'seed' ? COLORS.plant_seed : COLORS.plant_bloom;
+        const offset = plant.stage === 'seed' ? 10 : 6;
+        const size = plant.stage === 'seed' ? 12 : 20;
+        ctx.fillRect(plant.x * TILE_SIZE + offset, plant.y * TILE_SIZE + offset, size, size);
+    });
+
+    // Draw Player
+    ctx.fillStyle = COLORS.player;
+    ctx.fillRect(gameState.player.x * TILE_SIZE + 8, gameState.player.y * TILE_SIZE + 8, 16, 16);
+}
+
+/**
+ * SAVE / LOAD SYSTEM
+ */
+function saveGame() {
+    // 1. Serialize State
+    const jsonString = JSON.stringify(gameState, null, 4); // Pretty print for human readability
+    
+    // 2. Create Blob
+    const blob = new Blob([jsonString], { type: "text/plain" });
+    
+    // 3. Trigger Download
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `starlight_save_${Date.now()}.txt`;
+    link.click();
+    
+    showMessage("Game Saved to Downloads!");
+}
+
+function loadGame(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            // 1. Parse JSON
+            const loadedState = JSON.parse(e.target.result);
+            
+            // 2. Basic Validation
+            if (!loadedState.player || !loadedState.world) {
+                throw new Error("Missing core game data.");
+            }
+
+            // 3. Update State
+            gameState = loadedState;
+            draw();
+            updateHUD();
+            showMessage("Game Loaded Successfully!");
+        } catch (err) {
+            console.error(err);
+            alert("Error loading save file: Invalid format.");
+        }
+    };
+
+    reader.readAsText(file);
+}
+
+// Initial Draw
+draw();
+updateHUD();
+
+</script>
+</body>
+</html>
