@@ -38,12 +38,12 @@ const COLS = 20;
 const ROWS = 15;
 
 const COLORS = {
-    0: '#2d4a3e', // Grass
+    0: '#3E4E50', // Muted Dark Green (Grass)
     1: '#595652', // Rock
-    2: '#4da6ff', // Water
-    player: '#ffcc00', // Player
-    plant_seed: '#8fbc8f',
-    plant_bloom: '#ff99cc'
+    2: '#00ADB5', // Teal (Water)
+    player: '#FFD369', // Muted Gold (Player)
+    plant_seed: '#A3BE8C', // Soft Green
+    plant_bloom: '#B48EAD' // Soft Purple/Pink
 };
 
 // Default State
@@ -64,7 +64,7 @@ setInterval(() => {
     const p = gameState.player;
     
     // Check if there are ANY fully grown plants (blooms)
-    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
+    const hasActiveCrops = gameState.world.plants.length > 0	    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
 
     // If blooms exist, regen takes 60 seconds. Otherwise (empty or just seeds), 5 seconds.
     const regenTime = hasBlooms ? 60 : 5;
@@ -280,4 +280,5 @@ init();
 
 </script>
 </body>
+</html>
 </html>
