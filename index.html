@@ -63,5 +63,221 @@ let waterTimer = 0;
 setInterval(() => {
     const p = gameState.player;
     
-    // Check if there are ANY plants in the ground (seeds or blooms)
-    const hasActiveCrops = gameState.world.plants.length > 0
+    // Check if there are ANY fully grown plants (blooms)
+    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
+
+    // If blooms exist, regen takes 60 seconds. Otherwise (empty or just seeds), 5 seconds.
+    const regenTime = hasBlooms ? 60 : 5;
+
+    waterTimer++;
+    const percent = Math.min(100, Math.floor((waterTimer / regenTime) * 100));
+    document.getElementById('regen-timer').innerText = `(Regen: ${percent}%)`;
+    document.getElementById('regen-timer').style.color = "#aaa";
+
+    if (waterTimer >= regenTime) {
+        if (p.water < 20) {
+            p.water++;
+            waterTimer = 0;
+            updateHUD();
+            showMessage("Water regenerated!");
+        }
+    }
+}, 1000);
+
+/**
+ * CORE FUNCTIONS
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function init() {
+    // Generate random map if empty (default state)
+    // But default state has all 0s.
+    // map_generator.py generates a map.
+    // We start with default flat grass.
+
+    requestAnimationFrame(gameLoop);
+    updateHUD();
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+function update() {
+    // Game logic (e.g. plant growth) could go here
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Map
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            const tile = gameState.world.map[y][x];
+            ctx.fillStyle = COLORS[tile] || '#000';
+            ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+    }
+
+    // Draw Plants
+    gameState.world.plants.forEach(plant => {
+        const color = plant.stage === 'bloom' ? COLORS.plant_bloom : COLORS.plant_seed;
+        ctx.fillStyle = color;
+        // Draw plant as a smaller square in the center of the tile
+        const offset = TILE_SIZE / 4;
+        const size = TILE_SIZE / 2;
+        ctx.fillRect(plant.x * TILE_SIZE + offset, plant.y * TILE_SIZE + offset, size, size);
+    });
+
+    // Draw Player
+    ctx.fillStyle = COLORS.player;
+    ctx.beginPath();
+    ctx.arc(
+        gameState.player.x * TILE_SIZE + TILE_SIZE / 2,
+        gameState.player.y * TILE_SIZE + TILE_SIZE / 2,
+        TILE_SIZE / 3,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    // Draw Selection Highlight (where player is facing or standing)
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gameState.player.x * TILE_SIZE, gameState.player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+}
+
+/**
+ * INPUT HANDLING
+ */
+document.addEventListener('keydown', (e) => {
+    const p = gameState.player;
+    let newX = p.x;
+    let newY = p.y;
+
+    if (e.key === 'ArrowUp') newY--;
+    if (e.key === 'ArrowDown') newY++;
+    if (e.key === 'ArrowLeft') newX--;
+    if (e.key === 'ArrowRight') newX++;
+
+    // Collision Check
+    if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
+        const tile = gameState.world.map[newY][newX];
+        if (tile !== 1 && tile !== 2) { // 1=Rock, 2=Water (Solid)
+            p.x = newX;
+            p.y = newY;
+        }
+    }
+
+    if (e.key === ' ') {
+        handleAction();
+    }
+
+    updateHUD();
+});
+
+function handleAction() {
+    const p = gameState.player;
+    // Check if there is a plant here
+    const plantIndex = gameState.world.plants.findIndex(pl => pl.x === p.x && pl.y === p.y);
+
+    if (plantIndex !== -1) {
+        // Interact with plant
+        const plant = gameState.world.plants[plantIndex];
+        if (plant.stage === 'seed') {
+            if (p.water > 0) {
+                p.water--;
+                plant.stage = 'bloom';
+                showMessage("Watered the plant! It bloomed!");
+            } else {
+                showMessage("Not enough water!");
+            }
+        } else if (plant.stage === 'bloom') {
+            // Harvest
+            gameState.world.plants.splice(plantIndex, 1);
+            p.score++;
+            p.seeds += 2; // Get more seeds?
+            showMessage("Harvested! Got seeds + score.");
+        }
+    } else {
+        // Try to plant
+        const tile = gameState.world.map[p.y][p.x];
+        if (tile === 0) { // Grass
+            if (p.seeds > 0) {
+                p.seeds--;
+                gameState.world.plants.push({ x: p.x, y: p.y, stage: 'seed' });
+                showMessage("Planted a seed.");
+            } else {
+                showMessage("No seeds left!");
+            }
+        } else {
+            showMessage("Cannot plant here.");
+        }
+    }
+    updateHUD();
+}
+
+/**
+ * UI & UTILS
+ */
+function updateHUD() {
+    document.getElementById('status').innerHTML = `Seeds: ${gameState.player.seeds} | Water: ${gameState.player.water}`;
+    document.getElementById('score-display').innerHTML = `Harvested: ${gameState.player.score || 0}`;
+}
+
+function showMessage(msg) {
+    const el = document.getElementById('message-area');
+    el.innerText = msg;
+    setTimeout(() => {
+        if (el.innerText === msg) el.innerText = "";
+    }, 2000);
+}
+
+function saveGame() {
+    const dataStr = JSON.stringify(gameState, null, 4);
+    const blob = new Blob([dataStr], {type: "text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `starlight_save_${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function loadGame(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (data.world && data.player) {
+                gameState = data;
+                // Ensure plants array exists if loading old save or generator save
+                if (!gameState.world.plants) gameState.world.plants = [];
+                // Ensure score exists
+                if (gameState.player.score === undefined) gameState.player.score = 0;
+
+                updateHUD();
+                showMessage("Game Loaded!");
+            } else {
+                alert("Invalid save file format.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error parsing save file.");
+        }
+    };
+    reader.readAsText(file);
+}
+
+// Start
+init();
+
+</script>
+</body>
+</html>
