@@ -1,0 +1,72 @@
+body {
+    background-color: #111;
+    color: #eee;
+    font-family: 'Courier New', Courier, monospace; /* Retro feel */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.container {
+    text-align: center;
+}
+
+h1 {
+    color: #ffcc00;
+    text-shadow: 2px 2px #000;
+    margin-bottom: 10px;
+}
+
+canvas {
+    background-color: #000;
+    border: 4px solid #444;
+    image-rendering: pixelated; /* Crisp pixels */
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.2);
+}
+
+.controls {
+    margin-bottom: 15px;
+}
+
+button, .btn {
+    background-color: #333;
+    color: white;
+    border: 2px solid #666;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: inherit;
+    text-transform: uppercase;
+    font-weight: bold;
+    display: inline-block;
+    text-decoration: none;
+}
+
+button:hover, .btn:hover {
+    background-color: #555;
+    border-color: #ffcc00;
+}
+
+/* Hide the ugly default file input, use label instead */
+input[type="file"] {
+    display: none;
+}
+
+.hud {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #aaa;
+}
+
+#status {
+    font-size: 18px;
+    color: #fff;
+}
+
+#message-area {
+    height: 20px;
+    color: #ff99cc;
+    font-weight: bold;
+    margin-top: 5px;
+}
