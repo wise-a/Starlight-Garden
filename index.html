@@ -63,27 +63,23 @@ let waterTimer = 0;
 setInterval(() => {
     const p = gameState.player;
     
-    // Check if there are ANY plants in the ground (seeds or blooms)
-    const hasActiveCrops = gameState.world.plants.length > 0;
+    // Check if there are ANY fully grown plants (blooms)
+    const hasActiveCrops = gameState.world.plants.length > 0	    const hasBlooms = gameState.world.plants.some(plant => plant.stage === 'bloom');
 
-    if (hasActiveCrops) {
-        document.getElementById('regen-timer').innerText = "(Regen Paused - Crops Active)";
-        document.getElementById('regen-timer').style.color = "#ff6666";
-        waterTimer = 0;
-    } else {
-        waterTimer++;
-        const percent = Math.min(100, (waterTimer / 5) * 100); // 5 seconds to regen
-        document.getElementById('regen-timer').innerText = `(Regen: ${percent}%)`;
-        document.getElementById('regen-timer').style.color = "#aaa";
+    // If blooms exist, regen takes 60 seconds. Otherwise (empty or just seeds), 5 seconds.
+    const regenTime = hasBlooms ? 60 : 5;
 
-        if (waterTimer >= 5) {
-            if (p.water < 20) { // Max water 20? Or maybe 10 was initial. Let's say 10 is max/initial, but maybe it can go higher? Or just refill to 10?
-                // Let's assume it refills 1 water every 5 seconds if no crops.
-                p.water++;
-                waterTimer = 0;
-                updateHUD();
-                showMessage("Water regenerated!");
-            }
+    waterTimer++;
+    const percent = Math.min(100, Math.floor((waterTimer / regenTime) * 100));
+    document.getElementById('regen-timer').innerText = `(Regen: ${percent}%)`;
+    document.getElementById('regen-timer').style.color = "#aaa";
+
+    if (waterTimer >= regenTime) {
+        if (p.water < 20) {
+            p.water++;
+            waterTimer = 0;
+            updateHUD();
+            showMessage("Water regenerated!");
         }
     }
 }, 1000);
@@ -149,8 +145,8 @@ function draw() {
     ctx.fill();
 
     // Draw Selection Highlight (where player is facing or standing)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
     ctx.strokeRect(gameState.player.x * TILE_SIZE, gameState.player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
 }
 
@@ -284,4 +280,5 @@ init();
 
 </script>
 </body>
+</html>
 </html>
